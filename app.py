@@ -20,7 +20,7 @@ DB_CONFIG = {
     "database": "CustomerSupportDB",
 }
 
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+GROQ_API_KEY = "USE YOUR OWN KEY HERE"
 
 SMTP_HOST  = os.environ.get("SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT  = int(os.environ.get("SMTP_PORT", 587))
@@ -646,11 +646,11 @@ def rate_ticket(ticket_id, rating):
 # ─── AI SUGGEST PROXY ────────────────────────────────────────────────────────
 @app.route('/ai_suggest', methods=['POST'])
 def ai_suggest():
-    """Server-side proxy so the Anthropic API key is never exposed to the browser."""
+    """Server-side proxy so the Groq API key is never exposed to the browser."""
     if 'user' not in session:
         return jsonify({'error': 'Unauthorized'}), 401
 
-    data = request.get_json(force=True)
+    data        = request.get_json(force=True)
     subject     = data.get('subject', '')
     description = data.get('description', '')
     messages    = data.get('messages', [])
@@ -664,31 +664,37 @@ def ai_suggest():
         "Write only the reply text — no greeting prefix, no sign-off. Keep it 2-4 sentences."
     )
 
-    if not ANTHROPIC_API_KEY:
-        return jsonify({'error': 'ANTHROPIC_API_KEY not configured on the server.'}), 500
+    if not GROQ_API_KEY:
+        return jsonify({'error': 'GROQ_API_KEY not configured on the server.'}), 500
 
     payload = _json.dumps({
-        "model": "claude-sonnet-4-20250514",
-        "max_tokens": 1000,
-        "messages": [{"role": "user", "content": prompt}]
+        "model": "llama-3.3-70b-versatile",
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 1000
     }).encode()
 
     req = urllib.request.Request(
-        "https://api.anthropic.com/v1/messages",
+        "https://api.groq.com/openai/v1/chat/completions",
         data=payload,
         headers={
             "Content-Type": "application/json",
-            "x-api-key": ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
+            "Authorization": f"Bearer {GROQ_API_KEY}",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         },
         method="POST"
     )
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
             result = _json.loads(resp.read())
-        text = result['content'][0]['text']
+        text = result['choices'][0]['message']['content']
         return jsonify({'suggestion': text})
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode()
+        print("=== GROQ ERROR ===", error_body)
+        return jsonify({'error': error_body}), 500
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 
