@@ -4,11 +4,16 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Ticket, Users, BarChart3, LogOut, Menu, X, TrendingUp,
-  AlertCircle, CheckCircle, Clock, Star, Plus,
+  Ticket, Users, BarChart3, LogOut, Menu, X, Trash2,
+  AlertCircle, CheckCircle, Clock, Star, Plus, PieChart as PieIcon, LineChart as LineIcon,
+  LayoutDashboard
 } from "lucide-react";
 import {
-  getAdminReport, addAgent, assignTicket, handlePwRequest,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  LineChart, Line, PieChart, Pie, Cell, Legend
+} from "recharts";
+import {
+  getAdminReport, addAgent, deleteAgent, assignTicket, handlePwRequest,
   getDashboard, logout, isAuthenticated, getCurrentUser,
 } from "@/api";
 import { toast } from "sonner";
@@ -16,7 +21,7 @@ import { toast } from "sonner";
 export default function AdminDashboard() {
   const [, setLocation] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState("overview"); 
   const [loading, setLoading] = useState(true);
 
   // Data
@@ -78,6 +83,17 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleDeleteAgent = async (agentId: number) => {
+    if (!confirm("Are you sure you want to remove this agent? All assigned tickets will be unassigned.")) return;
+    try {
+      await deleteAgent(agentId);
+      toast.success("Agent removed from Nexora Registry");
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
+
   const handleAssign = async (ticketId: number, agentId: number | null) => {
     try {
       await assignTicket(ticketId, agentId);
@@ -88,30 +104,10 @@ export default function AdminDashboard() {
     }
   };
 
-  const handlePwAction = async (reqId: number, action: "approve" | "deny") => {
-    try {
-      await handlePwRequest(reqId, action);
-      toast.success(`Request ${action}d`);
-      fetchData();
-    } catch (err: any) {
-      toast.error(err.message);
-    }
-  };
-
-  const totalTickets = reportStats.total || 0;
-  const resolvedPct = totalTickets > 0 ? Math.round(((reportStats.resolved || 0) / totalTickets) * 100) : 0;
-
-  const stats = [
-    { label: "Total Tickets", value: totalTickets, icon: Ticket, color: "text-primary", trend: "" },
-    { label: "Resolved %", value: `${resolvedPct}%`, icon: CheckCircle, color: "text-green-400", trend: "" },
-    { label: "Open/Pending", value: reportStats.pending || 0, icon: AlertCircle, color: "text-secondary", trend: "" },
-    { label: "Avg Satisfaction", value: reportStats.avg_rating ? `${reportStats.avg_rating}⭐` : "N/A", icon: Star, color: "text-yellow-400", trend: "" },
-  ];
-
-  const maxDaily = Math.max(...(dailyData.map((d: any) => d.count || 0)), 1);
+  const COLORS = ['#00E5FF', '#BD00FF', '#00FFA3', '#FF005C'];
 
   return (
-    <div className="min-h-screen bg-background grid-bg-animated">
+    <div className="min-h-screen bg-background grid-bg-animated overflow-x-hidden">
       {/* Header */}
       <header className="sticky top-0 z-40 border-b border-border/20 bg-background/80 backdrop-blur-md">
         <div className="flex items-center justify-between px-4 py-4">
@@ -119,17 +115,12 @@ export default function AdminDashboard() {
             {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
           <div className="flex items-center gap-2 flex-1 md:flex-none">
-            <span className="text-lg font-bold text-primary neon-glow">ADMIN DASHBOARD</span>
+            <span className="text-xl font-black text-primary neon-glow tracking-tighter">NEXORA <span className="text-muted-foreground opacity-50 font-normal">| ADMIN PORTAL</span></span>
           </div>
           <div className="flex items-center gap-4">
-            <div className="hidden sm:flex items-center gap-2 text-sm">
-              <div className="w-8 h-8 rounded-full bg-secondary/20 flex items-center justify-center">
-                <span className="text-xs font-semibold text-secondary">AD</span>
-              </div>
-              <span className="text-foreground">Administrator</span>
-            </div>
-            <button onClick={logout} className="p-2 hover:bg-card/50 rounded-lg transition-colors">
-              <LogOut className="w-5 h-5 text-muted-foreground" />
+            <button onClick={logout} className="flex items-center gap-2 p-2 px-4 bg-red-500/10 border border-red-500/20 rounded-md hover:bg-red-500/20 transition-all">
+              <span className="text-[10px] font-black text-red-400">TERMINATE SESSION</span>
+              <LogOut className="w-4 h-4 text-red-400" />
             </button>
           </div>
         </div>
@@ -137,203 +128,162 @@ export default function AdminDashboard() {
 
       <div className="flex">
         {/* Sidebar */}
-        {sidebarOpen && (
-          <aside className="w-64 border-r border-border/20 bg-card/30 backdrop-blur-md p-6 hidden md:block">
-            <nav className="space-y-2">
-              <div className="px-4 py-2 rounded-lg bg-primary/10 border border-primary/30">
-                <p className="text-sm font-semibold text-primary">Overview</p>
-              </div>
-              <a href="#" className="flex items-center gap-3 px-4 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-card/50 transition-colors">
-                <BarChart3 className="w-5 h-5" /><span>Analytics</span>
-              </a>
-              <a href="#" className="flex items-center gap-3 px-4 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-card/50 transition-colors">
-                <Users className="w-5 h-5" /><span>Team Management</span>
-              </a>
-            </nav>
-          </aside>
-        )}
+        <aside className={`${sidebarOpen ? 'w-64' : 'w-0'} border-r border-border/20 bg-card/30 backdrop-blur-md h-[calc(100vh-73px)] sticky top-[73px] transition-all duration-300 overflow-hidden hidden md:block z-30`}>
+          <nav className="p-4 space-y-1">
+            {[
+              { id: "overview", label: "Overview", icon: LayoutDashboard },
+              { id: "assign", label: "Assign Tickets", icon: Ticket },
+              { id: "analytics", label: "Operational Intel", icon: BarChart3 },
+              { id: "agents", label: "Team Management", icon: Users },
+            ].map(item => (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                  activeTab === item.id 
+                    ? "bg-primary/20 text-primary border border-primary/30 shadow-[0_0_15px_rgba(0,229,255,0.1)]"
+                    : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+                }`}
+              >
+                <item.icon className="w-4 h-4" />
+                <span className="font-bold text-[11px] uppercase tracking-widest leading-none">{item.label}</span>
+              </button>
+            ))}
+          </nav>
+        </aside>
 
         {/* Main Content */}
-        <main className="flex-1 p-6 md:p-8">
-          {/* Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-            {stats.map((stat, idx) => (
-              <div key={idx} className="glass-card p-6 hover:scale-105 transition-transform">
-                <div className="flex items-center justify-between mb-4">
-                  <p className="text-sm text-muted-foreground">{stat.label}</p>
-                  <stat.icon className={`w-5 h-5 ${stat.color}`} />
-                </div>
-                <div className="flex items-end justify-between">
-                  <p className="text-3xl font-bold text-foreground">{stat.value}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Tabs */}
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="glass-card p-2 mb-6 inline-flex gap-2 bg-card/50 border border-border/30">
-              <TabsTrigger value="overview" className="px-4 py-2 rounded-lg data-[state=active]:bg-primary/20 data-[state=active]:text-primary transition-colors">Overview</TabsTrigger>
-              <TabsTrigger value="agents" className="px-4 py-2 rounded-lg data-[state=active]:bg-primary/20 data-[state=active]:text-primary transition-colors">Team Performance</TabsTrigger>
-              <TabsTrigger value="requests" className="px-4 py-2 rounded-lg data-[state=active]:bg-primary/20 data-[state=active]:text-primary transition-colors">Approvals</TabsTrigger>
-              <TabsTrigger value="assign" className="px-4 py-2 rounded-lg data-[state=active]:bg-primary/20 data-[state=active]:text-primary transition-colors">Assign Tickets</TabsTrigger>
-            </TabsList>
-
-            {/* Overview Tab */}
-            <TabsContent value="overview" className="space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="glass-card p-6">
-                  <h3 className="text-lg font-semibold mb-6">Ticket Priority Distribution</h3>
-                  <div className="space-y-4">
-                    {priorityData.map((item: any, idx: number) => {
-                      const pct = totalTickets > 0 ? Math.round(((item.count || 0) / totalTickets) * 100) : 0;
-                      return (
-                        <div key={idx}>
-                          <div className="flex justify-between mb-2">
-                            <span className="text-sm text-foreground">{item.Priority} Priority</span>
-                            <span className="text-sm font-semibold text-primary">{item.count}</span>
-                          </div>
-                          <div className="w-full h-2 rounded-full bg-card/50 overflow-hidden">
-                            <div className="h-full bg-gradient-to-r from-primary to-secondary" style={{ width: `${pct}%` }}></div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {priorityData.length === 0 && <p className="text-sm text-muted-foreground">No data yet.</p>}
+        <main className="flex-1 p-6 md:p-10">
+          <Tabs value={activeTab} className="w-full space-y-8">
+            
+            {/* 1. OVERVIEW (RESTORED) */}
+            <TabsContent value="overview" className="space-y-8 outline-none materialize">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="glass-card p-6 border-primary/20">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Grid Throughput</p>
+                    <p className="text-3xl font-black text-primary">{reportStats.total || 0}</p>
                   </div>
-                </div>
+                  <div className="glass-card p-6 border-green-500/20">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Resolved Units</p>
+                    <p className="text-3xl font-black text-green-400">{reportStats.resolved || 0}</p>
+                  </div>
+                  <div className="glass-card p-6 border-secondary/20">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Active Backlog</p>
+                    <p className="text-3xl font-black text-secondary">{reportStats.pending || 0}</p>
+                  </div>
+                  <div className="glass-card p-6 border-yellow-500/20">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Satisfaction Avg</p>
+                    <p className="text-3xl font-black text-yellow-400">{reportStats.avg_rating || "N/A"}</p>
+                  </div>
+              </div>
 
-                <div className="glass-card p-6">
-                  <h3 className="text-lg font-semibold mb-6">Tickets Last 7 Days</h3>
-                  <div className="flex items-end gap-2 h-40">
-                    {dailyData.length > 0 ? dailyData.map((item: any, idx: number) => (
-                      <div key={idx} className="flex-1 flex flex-col items-center gap-2">
-                        <div
-                          className="w-full bg-gradient-to-t from-primary to-secondary rounded-t-lg transition-all hover:opacity-80"
-                          style={{ height: `${((item.count || 0) / maxDaily) * 100}%` }}
-                        ></div>
-                        <span className="text-xs text-muted-foreground">{item.day?.slice(5)}</span>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Simplified Quick Assign */}
+                <div className="glass-card overflow-hidden">
+                  <div className="p-4 border-b border-white/5 bg-white/5 flex items-center justify-between">
+                    <h3 className="text-xs font-bold uppercase tracking-widest">Priority Triage</h3>
+                    <span className="text-[10px] bg-secondary/10 text-secondary px-2 py-0.5 rounded border border-secondary/20 font-bold">UNASSIGNED TKTs</span>
+                  </div>
+                  <div className="max-h-[350px] overflow-y-auto">
+                    {tickets.filter(t => !t.Agent_ID && t.Status !== "Resolved").slice(0, 10).map((t: any) => (
+                      <div key={t.Ticket_ID} className="p-4 border-b border-white/5 hover:bg-white/5 transition-colors flex items-center justify-between group">
+                         <div>
+                            <p className="text-xs font-bold text-primary mb-0.5">#{String(t.Ticket_ID).padStart(4, '0')}</p>
+                            <p className="text-sm font-semibold truncate max-w-[200px]">{t.Subject}</p>
+                         </div>
+                         <Select
+                              value="unassigned"
+                              onValueChange={(v) => handleAssign(t.Ticket_ID, v === "unassigned" ? null : parseInt(v))}
+                            >
+                              <SelectTrigger className="bg-white/5 border-white/10 w-32 h-8 text-[10px] font-bold">
+                                <SelectValue placeholder="Quick Assign" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {agentsList.map((a: any) => (
+                                  <SelectItem key={a.Agent_ID} value={String(a.Agent_ID)}>{a.Name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                       </div>
-                    )) : (
-                      <p className="text-sm text-muted-foreground w-full text-center">No data yet.</p>
+                    ))}
+                    {tickets.filter(t => !t.Agent_ID && t.Status !== "Resolved").length === 0 && (
+                      <div className="p-10 text-center text-xs italic text-muted-foreground">Grid is stable. No unassigned units.</div>
                     )}
                   </div>
                 </div>
+
+                {/* Performance Preview */}
+                <div className="glass-card overflow-hidden">
+                  <div className="p-4 border-b border-white/5 bg-white/5">
+                    <h3 className="text-xs font-bold uppercase tracking-widest">Top Performers</h3>
+                  </div>
+                  <div className="p-4 space-y-4">
+                    {performance.slice(0, 5).map((agent: any, idx: number) => (
+                      <div key={idx} className="flex items-center justify-between">
+                         <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded bg-primary/10 border border-primary/20 flex items-center justify-center font-bold text-primary text-xs">
+                               {agent.Name.charAt(0)}
+                            </div>
+                            <div>
+                               <p className="text-sm font-bold">{agent.Name}</p>
+                               <span className="text-[10px] text-muted-foreground uppercase">{agent.solved} RESOLUTIONS</span>
+                            </div>
+                         </div>
+                         <div className="flex items-center gap-1">
+                            <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
+                            <span className="text-xs font-bold">{agent.avg_rating || "0.0"}</span>
+                         </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </TabsContent>
 
-            {/* Team Performance Tab */}
-            <TabsContent value="agents" className="space-y-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold">Agent Performance</h3>
-                <button onClick={() => setShowAddForm(!showAddForm)} className="btn-primary inline-flex items-center gap-2">
-                  <Plus className="w-4 h-4" /> Add Team Member
-                </button>
+            {/* 2. ASSIGN TICKETS */}
+            <TabsContent value="assign" className="materialize outline-none">
+              <div className="mb-8">
+                <h2 className="text-2xl font-bold text-foreground">Assign Tickets</h2>
+                <p className="text-sm text-muted-foreground">Command and control hub for incoming grid requests.</p>
               </div>
 
-              {showAddForm && (
-                <div className="glass-card p-6 mb-4 space-y-4">
-                  <Input placeholder="Name" value={newAgent.name} onChange={(e) => setNewAgent({ ...newAgent, name: e.target.value })} className="bg-input/50 border-border/30" />
-                  <Input placeholder="Email" type="email" value={newAgent.email} onChange={(e) => setNewAgent({ ...newAgent, email: e.target.value })} className="bg-input/50 border-border/30" />
-                  <Select value={newAgent.role} onValueChange={(v) => setNewAgent({ ...newAgent, role: v })}>
-                    <SelectTrigger className="bg-input/50 border-border/30"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Agent">Agent</SelectItem>
-                      <SelectItem value="Administrator">Administrator</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <button onClick={handleAddAgent} className="btn-primary">Add Agent</button>
-                </div>
-              )}
-
-              <div className="glass-card overflow-hidden">
+              <div className="glass-card-enhanced overflow-hidden border-border/10">
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
-                      <tr className="border-b border-border/20 bg-card/50">
-                        <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">AGENT</th>
-                        <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">ASSIGNED</th>
-                        <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">RESOLVED</th>
-                        <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">AVG RATING</th>
+                      <tr className="border-b border-border/20 bg-card/60">
+                        <th className="px-6 py-4 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-widest">ID</th>
+                        <th className="px-6 py-4 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Subject</th>
+                        <th className="px-6 py-4 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Priority</th>
+                        <th className="px-6 py-4 text-right text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Operation</th>
                       </tr>
                     </thead>
-                    <tbody>
-                      {performance.map((agent: any, idx: number) => (
-                        <tr key={idx} className="border-b border-border/20 hover:bg-card/50 transition-colors">
-                          <td className="px-6 py-4 text-sm font-semibold text-foreground">{agent.Name}</td>
-                          <td className="px-6 py-4 text-sm text-foreground">{agent.assigned}</td>
-                          <td className="px-6 py-4 text-sm text-foreground">{agent.solved}</td>
-                          <td className="px-6 py-4 text-sm text-foreground">{agent.avg_rating || "N/A"}⭐</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {performance.length === 0 && (
-                  <div className="p-8 text-center text-muted-foreground">No agent data yet.</div>
-                )}
-              </div>
-            </TabsContent>
-
-            {/* Approvals Tab */}
-            <TabsContent value="requests" className="space-y-6">
-              <h3 className="text-lg font-semibold">Pending Approvals</h3>
-              {pwRequests.length > 0 ? (
-                <div className="space-y-4">
-                  {pwRequests.map((req: any) => (
-                    <div key={req.Request_ID} className="glass-card p-6 flex items-center justify-between">
-                      <div>
-                        <p className="font-semibold text-foreground">{req.Name}</p>
-                        <p className="text-sm text-muted-foreground">{req.Email_ID}</p>
-                        <p className="text-xs text-muted-foreground mt-1">Password Change Request</p>
-                      </div>
-                      <div className="flex gap-3">
-                        <button onClick={() => handlePwAction(req.Request_ID, "approve")} className="btn-primary px-6">Approve</button>
-                        <button onClick={() => handlePwAction(req.Request_ID, "deny")} className="btn-secondary px-6">Deny</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="glass-card p-12 text-center">
-                  <CheckCircle className="w-12 h-12 text-green-400 mx-auto mb-4 opacity-50" />
-                  <p className="text-muted-foreground">No pending approvals.</p>
-                </div>
-              )}
-            </TabsContent>
-
-            {/* Assign Tickets Tab */}
-            <TabsContent value="assign" className="space-y-6">
-              <h3 className="text-lg font-semibold">Assign Tickets to Agents</h3>
-              <div className="glass-card overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-border/20 bg-card/50">
-                        <th className="px-6 py-4 text-left text-sm font-semibold">TICKET</th>
-                        <th className="px-6 py-4 text-left text-sm font-semibold">SUBJECT</th>
-                        <th className="px-6 py-4 text-left text-sm font-semibold">STATUS</th>
-                        <th className="px-6 py-4 text-left text-sm font-semibold">ASSIGN TO</th>
-                      </tr>
-                    </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-border/10">
                       {tickets.filter(t => t.Status !== "Resolved").map((ticket: any) => (
-                        <tr key={ticket.Ticket_ID} className="border-b border-border/20 hover:bg-card/50">
-                          <td className="px-6 py-4 text-sm font-semibold text-primary">TKT-{String(ticket.Ticket_ID).padStart(3, '0')}</td>
-                          <td className="px-6 py-4 text-sm max-w-xs truncate">{ticket.Subject}</td>
-                          <td className="px-6 py-4 text-sm">
-                            <span className="status-badge status-open">{ticket.Status}</span>
+                        <tr key={ticket.Ticket_ID} className="hover:bg-primary/5 transition-all group">
+                          <td className="px-6 py-4">
+                            <span className="text-xs font-mono font-bold text-primary">#{String(ticket.Ticket_ID).padStart(4, '0')}</span>
                           </td>
-                          <td className="px-6 py-4 text-sm">
+                          <td className="px-6 py-4 text-sm font-semibold">{ticket.Subject}</td>
+                          <td className="px-6 py-4">
+                             <span className={`text-[10px] font-bold px-2 py-1 rounded-sm border ${
+                               ticket.Priority === 'High' ? 'bg-red-500/10 border-red-500/30 text-red-500' :
+                               ticket.Priority === 'Medium' ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-500' :
+                               'bg-green-500/10 border-green-500/30 text-green-500'
+                             }`}>
+                               {ticket.Priority?.toUpperCase()}
+                             </span>
+                          </td>
+                          <td className="px-6 py-4 text-right">
                             <Select
                               value={ticket.Agent_ID ? String(ticket.Agent_ID) : "unassigned"}
                               onValueChange={(v) => handleAssign(ticket.Ticket_ID, v === "unassigned" ? null : parseInt(v))}
                             >
-                              <SelectTrigger className="bg-input/50 border-border/30 w-40">
+                              <SelectTrigger className="bg-white/5 border-white/10 w-48 h-9 text-xs font-bold">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="unassigned">Unassigned</SelectItem>
+                                <SelectItem value="unassigned" className="text-red-400 font-bold">● UNASSIGNED</SelectItem>
                                 {agentsList.map((a: any) => (
                                   <SelectItem key={a.Agent_ID} value={String(a.Agent_ID)}>{a.Name}</SelectItem>
                                 ))}
@@ -345,9 +295,121 @@ export default function AdminDashboard() {
                     </tbody>
                   </table>
                 </div>
-                {tickets.filter(t => t.Status !== "Resolved").length === 0 && (
-                  <div className="p-8 text-center text-muted-foreground">No open tickets to assign.</div>
-                )}
+              </div>
+            </TabsContent>
+
+            {/* 3. OPERATIONAL INTEL (ANALYTICS) */}
+            <TabsContent value="analytics" className="materialize outline-none space-y-8">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div className="glass-card p-6 border-primary/20">
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-primary mb-8">Resolution Trends</h3>
+                  <div className="h-[300px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={dailyData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                        <XAxis dataKey="day" stroke="rgba(255,255,255,0.3)" fontSize={10} tickFormatter={(v) => v.slice(5)} />
+                        <YAxis stroke="rgba(255,255,255,0.3)" fontSize={10} />
+                        <Tooltip contentStyle={{ backgroundColor: '#020818', border: '1px solid rgba(255,255,255,0.1)' }} />
+                        <Line type="monotone" dataKey="count" stroke="#00E5FF" strokeWidth={3} dot={{ r: 4, fill: '#00E5FF' }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                <div className="glass-card p-6 border-secondary/20">
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-secondary mb-8">Priority Mix</h3>
+                  <div className="h-[300px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={priorityData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={80}
+                          paddingAngle={5}
+                          dataKey="count"
+                          nameKey="Priority"
+                        >
+                          {priorityData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip contentStyle={{ backgroundColor: '#020818', border: '1px solid rgba(255,255,255,0.1)' }} />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* 4. TEAM MANAGEMENT */}
+            <TabsContent value="agents" className="materialize outline-none space-y-6">
+              <div className="flex items-center justify-between gap-4">
+                <h2 className="text-2xl font-bold text-foreground">Team Management</h2>
+                <button onClick={() => setShowAddForm(!showAddForm)} className="btn-primary inline-flex items-center gap-2 group">
+                  <Plus className={`w-4 h-4 transition-transform duration-500 ${showAddForm ? 'rotate-45' : ''}`} /> 
+                  <span className="font-bold text-xs uppercase tracking-widest">Enroll Agent</span>
+                </button>
+              </div>
+
+              {showAddForm && (
+                <div className="glass-card p-8 materialize space-y-6 border-primary/30">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Input value={newAgent.name} onChange={(e) => setNewAgent({ ...newAgent, name: e.target.value })} className="bg-white/5" placeholder="Agent Name" />
+                    <Input value={newAgent.email} onChange={(e) => setNewAgent({ ...newAgent, email: e.target.value })} className="bg-white/5" placeholder="Identifier Email" />
+                  </div>
+                  <div className="flex gap-4">
+                    <Select value={newAgent.role} onValueChange={(v) => setNewAgent({ ...newAgent, role: v })}>
+                         <SelectTrigger className="bg-white/5 border-white/10"><SelectValue /></SelectTrigger>
+                         <SelectContent>
+                           <SelectItem value="Agent">Support Node</SelectItem>
+                           <SelectItem value="Administrator">Lead Overseer</SelectItem>
+                         </SelectContent>
+                    </Select>
+                    <button onClick={handleAddAgent} className="btn-primary px-8">ACTIVATE UNIT</button>
+                  </div>
+                </div>
+              )}
+
+              <div className="glass-card-enhanced overflow-hidden border-border/10">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-border/20 bg-card/60">
+                        <th className="px-6 py-4 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Ident</th>
+                        <th className="px-6 py-4 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Load</th>
+                        <th className="px-6 py-4 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Solved</th>
+                        <th className="px-6 py-4 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Rating</th>
+                        <th className="px-6 py-4 text-right text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/10">
+                      {performance.map((agent: any, idx: number) => (
+                        <tr key={idx} className="hover:bg-primary/5 transition-all group/row">
+                          <td className="px-6 py-4">
+                            <p className="text-sm font-bold text-foreground">{agent.Name}</p>
+                            <p className="text-[10px] text-muted-foreground">{agent.Email_ID}</p>
+                          </td>
+                          <td className="px-6 py-4 text-sm font-mono text-muted-foreground">{agent.assigned}</td>
+                          <td className="px-6 py-4 text-sm font-mono text-green-400">{agent.solved}</td>
+                          <td className="px-6 py-4">
+                             <div className="flex items-center gap-1">
+                                <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
+                                <span className="text-xs font-bold">{agent.avg_rating || 0}</span>
+                             </div>
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                             <button onClick={() => handleDeleteAgent(agent.Agent_ID)} className="p-2 text-muted-foreground hover:text-red-400 opacity-0 group-hover/row:opacity-100 transition-all">
+                               <Trash2 className="w-4 h-4" />
+                             </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </TabsContent>
           </Tabs>

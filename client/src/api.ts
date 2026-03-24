@@ -175,6 +175,10 @@ export async function addAgent(data: {
   });
 }
 
+export async function deleteAgent(agentId: number) {
+  return request(`/admin/agents/${agentId}`, { method: "DELETE" });
+}
+
 export async function assignTicket(ticketId: number, agentId: number | null) {
   return request(`/admin/tickets/${ticketId}/assign`, {
     method: "POST",

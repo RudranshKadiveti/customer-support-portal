@@ -1,24 +1,27 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
+import { 
   Ticket, MessageSquare, LogOut, Menu, X, Clock,
-  AlertCircle, CheckCircle, Search, ChevronRight,
+  AlertCircle, CheckCircle, Search, ChevronRight, LayoutDashboard,
+  Filter, Star
 } from "lucide-react";
-import { getDashboard, resolveTicket, logout, isAuthenticated, getCurrentUser } from "@/api";
+import { getDashboard, resolveTicket, assignTicket, logout, isAuthenticated, getCurrentUser } from "@/api";
 import { toast } from "sonner";
+
+type Section = "dashboard" | "my-tickets" | "active-tickets";
 
 export default function AgentDashboard() {
   const [, setLocation] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [filterStatus, setFilterStatus] = useState("all");
-  const [filterPriority, setFilterPriority] = useState("all");
+  const [activeSection, setActiveSection] = useState<Section>("dashboard");
   const [searchQuery, setSearchQuery] = useState("");
+  const [hideResolved, setHideResolved] = useState(false);
+  
   const [tickets, setTickets] = useState<any[]>([]);
   const [stats, setStats] = useState({ total: 0, open: 0, resolved: 0 });
   const [agents, setAgents] = useState<any[]>([]);
-  const [userName, setUserName] = useState("Agent");
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -26,18 +29,15 @@ export default function AgentDashboard() {
       setLocation("/staff-login");
       return;
     }
-    const user = getCurrentUser();
-    if (user) setUserName(user.Name || user.name || "Agent");
+    const current = getCurrentUser();
+    setUser(current);
     fetchDashboard();
   }, []);
 
-  const fetchDashboard = async (statusFilter?: string, priorityFilter?: string) => {
+  const fetchDashboard = async () => {
     setLoading(true);
     try {
-      const params: any = {};
-      if (statusFilter && statusFilter !== "all") params.status = statusFilter;
-      if (priorityFilter && priorityFilter !== "all") params.priority = priorityFilter;
-      const data = await getDashboard(params);
+      const data = await getDashboard();
       setTickets(data.tickets || []);
       setStats(data.stats || { total: 0, open: 0, resolved: 0 });
       setAgents(data.agents || []);
@@ -52,28 +52,35 @@ export default function AgentDashboard() {
     try {
       await resolveTicket(ticketId);
       toast.success("Ticket resolved!");
-      fetchDashboard(filterStatus, filterPriority);
+      fetchDashboard();
     } catch (err: any) {
       toast.error(err.message);
     }
   };
 
-  const handleFilterChange = (type: "status" | "priority", value: string) => {
-    if (type === "status") {
-      setFilterStatus(value);
-      fetchDashboard(value, filterPriority);
-    } else {
-      setFilterPriority(value);
-      fetchDashboard(filterStatus, value);
+  const currentAgentId = user?.agent_id || user?.Agent_ID;
+
+  const getFilteredData = () => {
+    let base = [...tickets];
+    
+    if (activeSection === "my-tickets") {
+      base = base.filter(t => t.Agent_ID === currentAgentId);
+      if (hideResolved) {
+        base = base.filter(t => t.Status !== "Resolved");
+      }
+    } else if (activeSection === "active-tickets") {
+      base = base.filter(t => t.Agent_ID === currentAgentId && t.Status !== "Resolved");
     }
+
+    return base.filter((ticket) => {
+      const matchesSearch =
+        String(ticket.Ticket_ID).includes(searchQuery) ||
+        (ticket.Subject || "").toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesSearch;
+    });
   };
 
-  const filteredTickets = tickets.filter((ticket) => {
-    const matchesSearch =
-      String(ticket.Ticket_ID).includes(searchQuery) ||
-      (ticket.Subject || "").toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesSearch;
-  });
+  const displayTickets = getFilteredData();
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -93,55 +100,34 @@ export default function AgentDashboard() {
     }
   };
 
-  const getSLAStatus = (ticket: any) => {
-    if (!ticket.Due_Date || ticket.Status === "Resolved") return null;
-    const due = new Date(ticket.Due_Date);
-    const now = new Date();
-    const hoursLeft = Math.max(0, Math.floor((due.getTime() - now.getTime()) / 3600000));
-
-    if (hoursLeft <= 4) {
-      return (
-        <div className="flex items-center gap-2 text-destructive pulse-alert">
-          <AlertCircle className="w-4 h-4" />
-          <span className="text-xs font-semibold">{hoursLeft}h left</span>
-        </div>
-      );
-    }
-    return (
-      <div className="flex items-center gap-2 text-muted-foreground">
-        <Clock className="w-4 h-4" />
-        <span className="text-xs">{hoursLeft}h left</span>
-      </div>
-    );
-  };
+  const menuItems = [
+    { id: "dashboard", label: "Overview", icon: LayoutDashboard },
+    { id: "my-tickets", label: "My History", icon: Ticket },
+    { id: "active-tickets", label: "Active Tickets", icon: MessageSquare },
+  ];
 
   return (
-    <div className="min-h-screen bg-background grid-bg-animated">
+    <div className="min-h-screen bg-background grid-bg-animated overflow-x-hidden">
       {/* Header */}
       <header className="sticky top-0 z-40 border-b border-border/20 bg-background/80 backdrop-blur-md">
         <div className="flex items-center justify-between px-4 py-4">
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-2 hover:bg-card/50 rounded-lg transition-colors md:hidden"
-          >
-            {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-          </button>
-
-          <div className="flex items-center gap-2 flex-1 md:flex-none">
-            <span className="text-lg font-bold text-primary neon-glow">AGENT DASHBOARD</span>
+          <div className="flex items-center gap-4">
+            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-card/50 rounded-lg transition-colors md:hidden">
+              {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
+            <span className="text-xl font-black text-primary neon-glow tracking-tighter uppercase">Nexora Agent</span>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="hidden sm:flex items-center gap-2 text-sm">
-              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-                <span className="text-xs font-semibold text-primary">
-                  {userName.split(" ").map(n => n[0]).join("").toUpperCase()}
-                </span>
+          <div className="flex items-center gap-6">
+            <div className="hidden sm:flex items-center gap-3">
+              <div className="w-8 h-8 rounded bg-primary/20 flex items-center justify-center font-bold text-primary text-xs">
+                {user?.Name?.[0] || "A"}
               </div>
-              <span className="text-foreground">{userName}</span>
+              <span className="text-sm font-bold text-foreground">{user?.Name || "Agent"}</span>
             </div>
-            <button onClick={logout} className="p-2 hover:bg-card/50 rounded-lg transition-colors">
-              <LogOut className="w-5 h-5 text-muted-foreground" />
+            <button onClick={logout} className="flex items-center gap-2 p-2 px-4 bg-red-500/10 border border-red-500/20 rounded-md hover:bg-red-500/20 transition-all">
+              <span className="text-[10px] font-black text-red-400">TERMINATE SESSION</span>
+              <LogOut className="w-4 h-4 text-red-400" />
             </button>
           </div>
         </div>
@@ -149,147 +135,177 @@ export default function AgentDashboard() {
 
       <div className="flex">
         {/* Sidebar */}
-        {sidebarOpen && (
-          <aside className="w-64 border-r border-border/20 bg-card/30 backdrop-blur-md p-6 hidden md:block">
-            <nav className="space-y-2">
-              <div className="px-4 py-2 rounded-lg bg-primary/10 border border-primary/30">
-                <p className="text-sm font-semibold text-primary">Dashboard</p>
-              </div>
-              <a href="#" className="flex items-center gap-3 px-4 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-card/50 transition-colors">
-                <MessageSquare className="w-5 h-5" />
-                <span>Conversations</span>
-              </a>
-              <a href="#" className="flex items-center gap-3 px-4 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-card/50 transition-colors">
-                <Ticket className="w-5 h-5" />
-                <span>My Tickets</span>
-              </a>
-            </nav>
-          </aside>
-        )}
+        <aside className={`${sidebarOpen ? 'w-64' : 'w-0'} border-r border-border/20 bg-card/10 backdrop-blur-md h-[calc(100vh-73px)] sticky top-[73px] transition-all duration-300 hidden md:block z-30`}>
+          <nav className="p-4 space-y-1">
+            {menuItems.map(item => (
+              <button
+                key={item.id}
+                onClick={() => setActiveSection(item.id as Section)}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                  activeSection === item.id 
+                    ? "bg-primary/20 text-primary border border-primary/30"
+                    : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+                }`}
+              >
+                <item.icon className="w-4 h-4" />
+                <span className="font-bold text-xs uppercase tracking-widest">{item.label}</span>
+              </button>
+            ))}
+          </nav>
+        </aside>
 
         {/* Main Content */}
-        <main className="flex-1 p-6 md:p-8">
-          {/* Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-            {[
-              { label: "Open Tickets", value: stats.open, icon: AlertCircle, color: "text-primary" },
-              { label: "Total Tickets", value: stats.total, icon: Clock, color: "text-secondary" },
-              { label: "Resolved", value: stats.resolved, icon: CheckCircle, color: "text-green-400" },
-            ].map((stat, idx) => (
-              <div key={idx} className="glass-card p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">{stat.label}</p>
-                    <p className="text-3xl font-bold text-foreground">{stat.value}</p>
-                  </div>
-                  <stat.icon className={`w-8 h-8 ${stat.color}`} />
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Filters and Search */}
-          <div className="glass-card p-6 mb-6">
-            <div className="flex flex-col md:flex-row gap-4 items-end">
-              <div className="flex-1">
-                <label className="block text-sm font-semibold text-foreground mb-2">SEARCH</label>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                  <Input
-                    type="text"
-                    placeholder="Search by ticket ID or subject..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10 bg-input/50 border-border/30 text-foreground"
-                  />
-                </div>
-              </div>
-
-              <div className="w-full md:w-40">
-                <label className="block text-sm font-semibold text-foreground mb-2">STATUS</label>
-                <Select value={filterStatus} onValueChange={(v) => handleFilterChange("status", v)}>
-                  <SelectTrigger className="bg-input/50 border-border/30">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="Open">Open</SelectItem>
-                    <SelectItem value="Resolved">Resolved</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="w-full md:w-40">
-                <label className="block text-sm font-semibold text-foreground mb-2">PRIORITY</label>
-                <Select value={filterPriority} onValueChange={(v) => handleFilterChange("priority", v)}>
-                  <SelectTrigger className="bg-input/50 border-border/30">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Priority</SelectItem>
-                    <SelectItem value="High">🔴 High</SelectItem>
-                    <SelectItem value="Medium">🟡 Medium</SelectItem>
-                    <SelectItem value="Low">🟢 Low</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
-
-          {/* Tickets Table */}
-          <div className="glass-card overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border/20 bg-card/50">
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">TICKET ID</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">SUBJECT</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">STATUS</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">PRIORITY</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">SLA</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">ACTION</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredTickets.map((ticket) => (
-                    <tr key={ticket.Ticket_ID} className="border-b border-border/20 hover:bg-card/50 transition-colors">
-                      <td className="px-6 py-4 text-sm font-semibold text-primary">TKT-{String(ticket.Ticket_ID).padStart(3, '0')}</td>
-                      <td className="px-6 py-4 text-sm text-foreground max-w-xs truncate">{ticket.Subject}</td>
-                      <td className="px-6 py-4 text-sm">{getStatusBadge(ticket.Status)}</td>
-                      <td className="px-6 py-4 text-sm">{getPriorityBadge(ticket.Priority)}</td>
-                      <td className="px-6 py-4 text-sm">{getSLAStatus(ticket)}</td>
-                      <td className="px-6 py-4 text-sm">
-                        <div className="flex gap-2">
-                          {ticket.Status !== "Resolved" && (
-                            <button
-                              onClick={() => handleResolve(ticket.Ticket_ID)}
-                              className="px-3 py-1 text-xs bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30 transition-colors"
-                            >
-                              Resolve
-                            </button>
-                          )}
-                          <Link href={`/conversation/${ticket.Ticket_ID}`}>
-                            <button className="p-2 hover:bg-primary/20 rounded-lg transition-colors">
-                              <ChevronRight className="w-4 h-4 text-primary" />
-                            </button>
-                          </Link>
-                        </div>
-                      </td>
-                    </tr>
+        <main className="flex-1 p-6 md:p-10">
+          {activeSection === "dashboard" ? (
+             <div className="space-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {[
+                    { label: "Active Tickets", value: stats.open, icon: AlertCircle, color: "text-primary" },
+                    { label: "Total Recieved", value: stats.total, icon: Clock, color: "text-secondary" },
+                    { label: "Resolved Work", value: stats.resolved, icon: CheckCircle, color: "text-green-400" },
+                  ].map((stat, idx) => (
+                    <div key={idx} className="glass-card p-6 border-white/5 materialize">
+                      <div className="flex items-center justify-between mb-4">
+                        <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">{stat.label}</p>
+                        <stat.icon className={`w-4 h-4 ${stat.color}`} />
+                      </div>
+                      <p className="text-3xl font-black">{stat.value}</p>
+                    </div>
                   ))}
-                </tbody>
-              </table>
-            </div>
+                </div>
 
-            {filteredTickets.length === 0 && (
-              <div className="p-12 text-center">
-                <Ticket className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-                <p className="text-muted-foreground">
-                  {loading ? "Loading tickets..." : "No tickets found matching your filters."}
-                </p>
+                <div className="glass-card border-white/5 overflow-hidden materialize">
+                  <div className="p-4 border-b border-white/5 bg-white/5 flex items-center justify-between">
+                    <h3 className="text-xs font-bold uppercase tracking-widest">Active Operations</h3>
+                    <button onClick={() => setActiveSection("active-tickets")} className="text-[10px] font-bold text-primary group flex items-center gap-1">
+                      EXPAND MATRIX <ChevronRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
+                    </button>
+                  </div>
+                  <div className="divide-y divide-white/5">
+                    {tickets.filter(t => t.Agent_ID === currentAgentId && t.Status !== "Resolved").slice(0, 5).map(t => (
+                      <div key={t.Ticket_ID} className="p-4 flex items-center justify-between hover:bg-white/5 transition-colors">
+                        <div className="flex items-center gap-4">
+                           <div className="text-xs font-mono font-bold text-primary">#{t.Ticket_ID}</div>
+                           <p className="text-sm font-bold truncate max-w-[200px]">{t.Subject}</p>
+                        </div>
+                        <Link href={`/conversation/${t.Ticket_ID}`}>
+                           <button className="p-2 bg-primary/10 border border-primary/20 rounded hover:bg-primary/20"><ChevronRight className="w-3 h-3 text-primary" /></button>
+                        </Link>
+                      </div>
+                    ))}
+                    {tickets.filter(t => t.Agent_ID === currentAgentId && t.Status !== "Resolved").length === 0 && (
+                      <div className="p-10 text-center text-xs text-muted-foreground italic">Grid registry clear. No pending units.</div>
+                    )}
+                  </div>
+                </div>
+             </div>
+          ) : (
+            <div className="space-y-6">
+              <div className="flex flex-col md:flex-row md:items-center gap-4 justify-between">
+                <div className="flex-1 max-w-xl">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search registry subject..."
+                      value={searchQuery}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
+                      className="pl-10 bg-white/5 border-white/10"
+                    />
+                  </div>
+                </div>
+                {activeSection === "my-tickets" && (
+                  <button
+                    onClick={() => setHideResolved(!hideResolved)}
+                    className={`flex items-center gap-2 px-4 h-10 rounded border text-[10px] font-bold transition-all ${hideResolved ? 'bg-primary/20 border-primary text-primary' : 'bg-white/5 border-white/10 text-muted-foreground'}`}
+                  >
+                    <Filter className="w-3 h-3" />
+                    HIDE RESOLVED
+                  </button>
+                )}
               </div>
-            )}
-          </div>
+
+              <div className="glass-card-enhanced border-white/10 animate-in fade-in slide-in-from-bottom-2 duration-500 relative z-0">
+                <div className="">
+                  <table className="w-full relative">
+                    <thead>
+                      <tr className="border-b border-white/5 bg-white/5">
+                        <th className="px-6 py-4 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-widest whitespace-nowrap">Identifier</th>
+                        <th className="px-6 py-4 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-widest whitespace-nowrap">Subject</th>
+                        <th className="px-6 py-4 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-widest whitespace-nowrap">State</th>
+                        <th className="px-6 py-4 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-widest whitespace-nowrap">Urgency</th>
+                        <th className="px-6 py-4 text-right text-[10px] font-bold text-muted-foreground uppercase tracking-widest whitespace-nowrap">Mission Control</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {displayTickets.map((ticket) => (
+                        <tr key={ticket.Ticket_ID} className="hover:bg-primary/5 transition-all group/row">
+                          <td className="px-6 py-5">
+                            <span className="text-xs font-mono font-bold text-primary">#{String(ticket.Ticket_ID).padStart(4, '0')}</span>
+                          </td>
+                          <td className="px-6 py-5">
+                            <p className="text-sm font-bold text-foreground group-hover/row:text-primary transition-colors">{ticket.Subject}</p>
+                            <p className="text-[10px] text-muted-foreground opacity-60">LOG: {new Date(ticket.Created_Date).toLocaleDateString()}</p>
+                          </td>
+                          <td className="px-6 py-5">{getStatusBadge(ticket.Status)}</td>
+                          <td className="px-6 py-5">{getPriorityBadge(ticket.Priority)}</td>
+                          <td className="px-6 py-5 text-right">
+                            <div className="flex items-center justify-end gap-2 relative">
+                               <Link href={`/conversation/${ticket.Ticket_ID}`}>
+                                  <button className="px-3 py-1.5 bg-primary/10 border border-primary/20 text-primary text-[10px] font-black hover:bg-primary/20 transition-all">
+                                    OPEN CHAT
+                                  </button>
+                               </Link>
+
+                               {ticket.Status !== "Resolved" && (
+                                 <>
+                                   <div className="relative group/pass">
+                                      <button className="px-3 py-1.5 bg-secondary/10 border border-secondary/30 text-secondary text-[10px] font-black hover:bg-secondary/20 transition-all">
+                                        PASS
+                                      </button>
+                                      {/* Dropdown - positioned below and atop everything with pointer events fix */}
+                                      <div className="absolute right-0 top-full mt-1 w-48 invisible group-hover/pass:visible opacity-0 group-hover/pass:opacity-100 transition-all z-[999] materialize">
+                                         <div className="bg-card border border-border/40 rounded-md shadow-[0_10px_40px_rgba(0,0,0,0.8)] p-1 overflow-hidden ring-1 ring-white/10">
+                                            <p className="p-2 text-[9px] font-bold text-muted-foreground border-b border-white/5 uppercase">Agent Registry</p>
+                                            <div className="max-h-40 overflow-y-auto custom-scrollbar">
+                                              {agents.filter(a => a.Agent_ID !== currentAgentId).map(agent => (
+                                                <button
+                                                  key={agent.Agent_ID}
+                                                  onClick={() => {
+                                                    assignTicket(ticket.Ticket_ID, agent.Agent_ID)
+                                                      .then(() => { toast.success(`Transferred to ${agent.Name}`); fetchDashboard(); })
+                                                      .catch(e => toast.error(e.message));
+                                                  }}
+                                                  className="w-full text-left px-3 py-2 text-[10px] font-bold hover:bg-primary/20 hover:text-primary rounded transition-colors"
+                                                >
+                                                  {agent.Name}
+                                                </button>
+                                              ))}
+                                            </div>
+                                         </div>
+                                      </div>
+                                   </div>
+                                   
+                                   <button 
+                                      onClick={() => handleResolve(ticket.Ticket_ID)}
+                                      className="px-3 py-1.5 bg-green-500/10 border border-green-500/20 text-green-400 text-[10px] font-black hover:bg-green-500/20 transition-all"
+                                   >
+                                      RESOLVE
+                                   </button>
+                                 </>
+                               )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {displayTickets.length === 0 && (
+                  <div className="p-20 text-center italic text-xs text-muted-foreground">Registry scan successful. No units found for this query.</div>
+                )}
+              </div>
+            </div>
+          )}
         </main>
       </div>
     </div>

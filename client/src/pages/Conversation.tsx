@@ -151,30 +151,41 @@ export default function Conversation() {
         </div>
       </div>
 
-      {/* Message Input */}
+      {/* Message Input - Lockdown if Resolved */}
       <div className="border-t border-white/5 bg-[#020818]/80 backdrop-blur-2xl relative z-10">
         <div className="container mx-auto px-4 py-4 max-w-3xl">
-          <div className="flex gap-3">
-            <textarea
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Type your message..."
-              rows={1}
-              className="flex-1 px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-foreground placeholder:text-muted-foreground focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all resize-none"
-            />
-            <button
-              onClick={handleSend}
-              disabled={sending || !newMessage.trim()}
-              className="px-6 rounded-xl bg-primary text-primary-foreground font-bold transition-all hover:shadow-[0_0_20px_rgba(0,229,255,0.4)] disabled:opacity-50 flex items-center gap-2"
-            >
-              {sending ? (
-                <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <Send className="w-4 h-4" />
-              )}
-            </button>
-          </div>
+          {ticket?.Status === "Resolved" ? (
+            <div className="flex items-center justify-center p-10 border border-white/10 rounded-2xl bg-white/5 materialize shadow-inner shadow-black/40">
+              <div className="flex flex-col items-center gap-3">
+                 <div className="w-2.5 h-2.5 rounded-full bg-red-400 animate-pulse shadow-[0_0_15px_rgba(248,113,113,0.5)]" />
+                 <p className="font-bold text-muted-foreground uppercase tracking-widest text-[10px] sm:text-xs">Ticket has been closed - can't send message</p>
+                 <p className="text-[9px] text-muted-foreground opacity-40 uppercase tracking-tighter">Read-only mode active</p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-3 materialize">
+              <textarea
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Type your message..."
+                rows={1}
+                className="flex-1 px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-foreground placeholder:text-muted-foreground focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all resize-none shadow-inner"
+              />
+              <button
+                onClick={handleSend}
+                disabled={sending || !newMessage.trim()}
+                className="px-6 rounded-xl bg-primary text-primary-foreground font-bold transition-all hover:shadow-[0_0_20px_rgba(0,229,255,0.4)] disabled:opacity-50 flex items-center gap-2 active:scale-95"
+              >
+                {sending ? (
+                  <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4" />
+                )}
+                <span className="hidden sm:inline">SEND</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

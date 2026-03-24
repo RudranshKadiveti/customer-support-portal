@@ -163,25 +163,6 @@ export default function StaffLogin() {
               </button>
             </form>
 
-            <div className="relative my-8">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-white/10"></div>
-              </div>
-              <div className="relative flex justify-center text-xs">
-                <span className="px-2 bg-[#020818] text-muted-foreground">or</span>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                setEmail("admin@support.com");
-                setPassword("admin1234");
-              }}
-              className="w-full py-3 px-4 rounded-lg border border-white/10 text-foreground hover:bg-white/5 hover:border-primary/30 transition-all text-sm font-semibold uppercase tracking-widest"
-            >
-              Use Demo Credentials
-            </button>
 
             <p className="text-center text-xs text-muted-foreground mt-8">
               Not a staff member?{" "}
@@ -191,17 +172,6 @@ export default function StaffLogin() {
             </p>
           </div>
 
-          {/* Info Box */}
-          <div className="glass-card-enhanced p-6 materialize" style={{ animationDelay: '0.3s' }}>
-            <div className="flex items-start gap-3">
-              <Zap className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
-              <div className="text-xs text-muted-foreground space-y-1">
-                <p className="font-bold text-white">Demo Credentials</p>
-                <p>Admin: <span className="text-primary font-mono">admin@support.com</span> / <span className="text-primary font-mono">admin1234</span></p>
-                <p>Agent: <span className="text-primary font-mono">ganesh@support.com</span> / <span className="text-primary font-mono">ganesh123</span></p>
-              </div>
-            </div>
-          </div>
 
           {/* System Status */}
           <div className="glass-card-enhanced p-4 materialize" style={{ animationDelay: '0.4s' }}>

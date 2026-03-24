@@ -604,38 +604,60 @@ async def add_agent(request: Request, body: AddAgentRequest):
 
 @app.post("/api/admin/tickets/{ticket_id}/assign")
 @limiter.limit(RATE_LIMIT_API)
-async def assign_ticket(request: Request, ticket_id: int,
-                        body: AssignTicketRequest):
-    """Admin assigns a ticket to an agent."""
+async def assign_ticket(request: Request, ticket_id: int, body: AssignTicketRequest):
+    """Assigns a ticket to an agent. Admin only, or current owner to 'pass'."""
+    user = get_current_user(request)
+    conn = get_db_conn()
+    cursor = conn.cursor()
+    try:
+        # Get current ticket state
+        execute_query(cursor, f"SELECT Agent_ID, Priority FROM Tickets WHERE Ticket_ID = {PH}", (ticket_id,))
+        ticket = fetch_one(cursor)
+        if not ticket:
+            raise HTTPException(404, "Ticket not found")
+
+        # Security check: Admin OR currently assigned agent
+        is_admin = user["role"] == "Administrator"
+        is_owner = ticket["Agent_ID"] == user["agent_id"]
+        if not (is_admin or is_owner):
+            raise HTTPException(403, "Not authorized to reassign this ticket")
+
+        if body.agent_id:
+            # Calculate due date based on priority if it's a new assignment
+            hr = {"High": 24, "Medium": 48, "Low": 72}.get(ticket["Priority"] or "Low", 48)
+            due = datetime.now() + timedelta(hours=hr)
+            execute_query(cursor,
+                f"UPDATE Tickets SET Agent_ID = {PH}, Assigned_At = CURRENT_TIMESTAMP, Due_Date = {PH} "
+                f"WHERE Ticket_ID = {PH}",
+                (body.agent_id, due, ticket_id))
+        else:
+            execute_query(cursor, f"UPDATE Tickets SET Agent_ID = NULL, Assigned_At = NULL, Due_Date = NULL WHERE Ticket_ID = {PH}", (ticket_id,))
+        
+        if not IS_MYSQL:
+            conn.commit()
+        return {"message": "Ticket successfully reassigned"}
+    finally:
+        conn.close()
+
+@app.delete("/api/admin/agents/{agent_id}")
+@limiter.limit(RATE_LIMIT_API)
+async def delete_agent(request: Request, agent_id: int):
+    """Admin only: remove a support agent from the system."""
     user = get_current_user(request)
     require_admin(user)
+    
+    if agent_id == user["agent_id"]:
+        raise HTTPException(400, "You cannot delete yourself.")
 
     conn = get_db_conn()
     cursor = conn.cursor()
     try:
-        if body.agent_id:
-            execute_query(cursor,
-                f"SELECT Priority FROM Tickets WHERE Ticket_ID = {PH}",
-                (ticket_id,))
-            t = fetch_one(cursor)
-            hr = {"High": 24, "Medium": 48, "Low": 72}.get(
-                t["Priority"] if t else "Low", 48
-            )
-            due = datetime.now() + timedelta(hours=hr)
-            execute_query(cursor,
-                f"UPDATE Tickets SET Agent_ID = {PH}, "
-                f"Assigned_At = CURRENT_TIMESTAMP, Due_Date = {PH} "
-                f"WHERE Ticket_ID = {PH}",
-                (body.agent_id, due, ticket_id))
-        else:
-            execute_query(cursor,
-                f"UPDATE Tickets SET Agent_ID = NULL, "
-                f"Assigned_At = NULL, Due_Date = NULL "
-                f"WHERE Ticket_ID = {PH}",
-                (ticket_id,))
+        # Unassign tickets assigned to this agent before deleting
+        execute_query(cursor, f"UPDATE Tickets SET Agent_ID = NULL WHERE Agent_ID = {PH}", (agent_id,))
+        execute_query(cursor, f"DELETE FROM Support_Agents WHERE Agent_ID = {PH}", (agent_id,))
         if not IS_MYSQL:
             conn.commit()
-        return {"message": "Ticket assignment updated"}
+        return {"message": "Agent removed successfully."}
     finally:
         conn.close()
 
