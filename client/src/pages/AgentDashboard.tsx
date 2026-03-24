@@ -4,9 +4,9 @@ import { Input } from "@/components/ui/input";
 import { 
   Ticket, MessageSquare, LogOut, Menu, X, Clock,
   AlertCircle, CheckCircle, Search, ChevronRight, LayoutDashboard,
-  Filter, Star
+  Filter, Star, KeyRound
 } from "lucide-react";
-import { getDashboard, resolveTicket, assignTicket, logout, isAuthenticated, getCurrentUser } from "@/api";
+import { getDashboard, resolveTicket, assignTicket, logout, isAuthenticated, getCurrentUser, requestPasswordChange } from "@/api";
 import { toast } from "sonner";
 
 type Section = "dashboard" | "my-tickets" | "active-tickets";
@@ -23,6 +23,7 @@ export default function AgentDashboard() {
   const [agents, setAgents] = useState<any[]>([]);
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [pwRequestLoading, setPwRequestLoading] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -32,10 +33,15 @@ export default function AgentDashboard() {
     const current = getCurrentUser();
     setUser(current);
     fetchDashboard();
+    
+    const interval = setInterval(() => {
+      fetchDashboard(true);
+    }, 10000);
+    return () => clearInterval(interval);
   }, []);
 
-  const fetchDashboard = async () => {
-    setLoading(true);
+  const fetchDashboard = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const data = await getDashboard();
       setTickets(data.tickets || []);
@@ -58,18 +64,37 @@ export default function AgentDashboard() {
     }
   };
 
+  const handleRequestPasswordChange = async () => {
+    setPwRequestLoading(true);
+    try {
+      await requestPasswordChange();
+      toast.success("Password change request submitted. Await admin approval.");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to submit request.");
+    } finally {
+      setPwRequestLoading(false);
+    }
+  };
+
   const currentAgentId = user?.agent_id || user?.Agent_ID;
+  const isAdmin = user?.Role === "Administrator" || user?.role === "Administrator";
 
   const getFilteredData = () => {
     let base = [...tickets];
     
     if (activeSection === "my-tickets") {
-      base = base.filter(t => t.Agent_ID === currentAgentId);
+      if (!isAdmin) {
+        base = base.filter(t => t.Agent_ID === currentAgentId);
+      }
       if (hideResolved) {
         base = base.filter(t => t.Status !== "Resolved");
       }
     } else if (activeSection === "active-tickets") {
-      base = base.filter(t => t.Agent_ID === currentAgentId && t.Status !== "Resolved");
+      if (isAdmin) {
+        base = base.filter(t => t.Status !== "Resolved");
+      } else {
+        base = base.filter(t => (t.Agent_ID === currentAgentId || !t.Agent_ID) && t.Status !== "Resolved");
+      }
     }
 
     return base.filter((ticket) => {
@@ -102,7 +127,7 @@ export default function AgentDashboard() {
 
   const menuItems = [
     { id: "dashboard", label: "Overview", icon: LayoutDashboard },
-    { id: "my-tickets", label: "My History", icon: Ticket },
+    { id: "my-tickets", label: (user?.role === "Administrator" || user?.Role === "Administrator") ? "Global History" : "My History", icon: Ticket },
     { id: "active-tickets", label: "Active Tickets", icon: MessageSquare },
   ];
 
@@ -152,6 +177,26 @@ export default function AgentDashboard() {
               </button>
             ))}
           </nav>
+          <div className="p-4 border-t border-border/20">
+            {(user?.Role === "Administrator" || user?.role === "Administrator") && (
+              <Link href="/admin-dashboard">
+                <button className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 border border-transparent transition-all mb-2">
+                  <LayoutDashboard className="w-4 h-4" />
+                  <span className="font-bold text-xs uppercase tracking-widest">Admin Portal</span>
+                </button>
+              </Link>
+            )}
+            <button
+              onClick={handleRequestPasswordChange}
+              disabled={pwRequestLoading}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:text-amber-400 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20 transition-all disabled:opacity-50"
+            >
+              {pwRequestLoading
+                ? <div className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+                : <KeyRound className="w-4 h-4" />}
+              <span className="font-bold text-xs uppercase tracking-widest">Change Password</span>
+            </button>
+          </div>
         </aside>
 
         {/* Main Content */}
@@ -182,7 +227,7 @@ export default function AgentDashboard() {
                     </button>
                   </div>
                   <div className="divide-y divide-white/5">
-                    {tickets.filter(t => t.Agent_ID === currentAgentId && t.Status !== "Resolved").slice(0, 5).map(t => (
+                    {tickets.filter(t => (isAdmin ? true : (t.Agent_ID === currentAgentId || !t.Agent_ID)) && t.Status !== "Resolved").slice(0, 5).map(t => (
                       <div key={t.Ticket_ID} className="p-4 flex items-center justify-between hover:bg-white/5 transition-colors">
                         <div className="flex items-center gap-4">
                            <div className="text-xs font-mono font-bold text-primary">#{t.Ticket_ID}</div>
@@ -193,7 +238,7 @@ export default function AgentDashboard() {
                         </Link>
                       </div>
                     ))}
-                    {tickets.filter(t => t.Agent_ID === currentAgentId && t.Status !== "Resolved").length === 0 && (
+                    {tickets.filter(t => (isAdmin ? true : (t.Agent_ID === currentAgentId || !t.Agent_ID)) && t.Status !== "Resolved").length === 0 && (
                       <div className="p-10 text-center text-xs text-muted-foreground italic">Grid registry clear. No pending units.</div>
                     )}
                   </div>
@@ -256,7 +301,7 @@ export default function AgentDashboard() {
                                   </button>
                                </Link>
 
-                               {ticket.Status !== "Resolved" && (
+                               {(!isAdmin && ticket.Status !== "Resolved") && (
                                  <>
                                    <div className="relative group/pass">
                                       <button className="px-3 py-1.5 bg-secondary/10 border border-secondary/30 text-secondary text-[10px] font-black hover:bg-secondary/20 transition-all">

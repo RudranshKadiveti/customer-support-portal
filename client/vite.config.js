@@ -24,9 +24,6 @@ export default defineConfig({
         secure: false,
       },
     },
-    allowedHosts: [
-      "localhost",
-      "127.0.0.1",
-    ],
+    allowedHosts: true,
   },
 })

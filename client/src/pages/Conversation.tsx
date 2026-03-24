@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useParams } from "wouter";
 import { ArrowLeft, Send, MessageSquare, User, Cpu } from "lucide-react";
 import { ImmersiveBackground } from "@/components/ImmersiveBackground";
-import { getConversation, postConversation, isAuthenticated } from "@/api";
+import { getConversation, postConversation, isAuthenticated, aiSuggest } from "@/api";
 import { toast } from "sonner";
 
 export default function Conversation() {
@@ -13,13 +13,18 @@ export default function Conversation() {
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [aiLoading, setAiLoading] = useState(false);
 
   useEffect(() => {
     fetchConversation();
+    const interval = setInterval(() => {
+      fetchConversation(true);
+    }, 10000);
+    return () => clearInterval(interval);
   }, [ticketId]);
 
-  const fetchConversation = async () => {
-    setLoading(true);
+  const fetchConversation = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const data = await getConversation(ticketId);
       setTicket(data.ticket);
@@ -37,11 +42,23 @@ export default function Conversation() {
     try {
       await postConversation(ticketId, newMessage);
       setNewMessage("");
-      fetchConversation();
+      fetchConversation(true);
     } catch (err: any) {
       toast.error(err.message);
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleAI = async () => {
+    setAiLoading(true);
+    try {
+      const res = await aiSuggest();
+      setNewMessage((prev) => (prev ? prev + "\n" + res.suggestion : res.suggestion));
+    } catch (err: any) {
+      toast.error(err.message || "AI failed to respond");
+    } finally {
+      setAiLoading(false);
     }
   };
 
@@ -172,6 +189,18 @@ export default function Conversation() {
                 rows={1}
                 className="flex-1 px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-foreground placeholder:text-muted-foreground focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all resize-none shadow-inner"
               />
+              <button
+                onClick={handleAI}
+                disabled={aiLoading || sending}
+                className="px-4 rounded-xl border border-primary/30 text-primary hover:bg-primary/10 transition-all disabled:opacity-50 flex items-center justify-center active:scale-95"
+                title="AI Suggest"
+              >
+                {aiLoading ? (
+                  <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Cpu className="w-4 h-4 text-primary" />
+                )}
+              </button>
               <button
                 onClick={handleSend}
                 disabled={sending || !newMessage.trim()}

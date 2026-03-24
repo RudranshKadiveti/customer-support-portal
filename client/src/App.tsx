@@ -11,6 +11,7 @@ import StaffLogin from "./pages/StaffLogin";
 import AgentDashboard from "./pages/AgentDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import Conversation from "./pages/Conversation";
+import SetPassword from "./pages/SetPassword";
 
 function Router() {
   return (
@@ -21,6 +22,7 @@ function Router() {
       <Route path={"/agent-dashboard"} component={AgentDashboard} />
       <Route path={"/admin-dashboard"} component={AdminDashboard} />
       <Route path={"/conversation/:ticketId"} component={Conversation} />
+      <Route path={"/set-password"} component={SetPassword} />
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />

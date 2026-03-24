@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Ticket, Users, BarChart3, LogOut, Menu, X, Trash2,
   AlertCircle, CheckCircle, Clock, Star, Plus, PieChart as PieIcon, LineChart as LineIcon,
-  LayoutDashboard
+  LayoutDashboard, ShieldCheck, MessageSquare
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -48,10 +48,15 @@ export default function AdminDashboard() {
       return;
     }
     fetchData();
+
+    const interval = setInterval(() => {
+      fetchData(true);
+    }, 10000);
+    return () => clearInterval(interval);
   }, []);
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const [report, dashboard] = await Promise.all([
         getAdminReport(),
@@ -106,6 +111,15 @@ export default function AdminDashboard() {
 
   const COLORS = ['#00E5FF', '#BD00FF', '#00FFA3', '#FF005C'];
 
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "Open": return <span className="status-badge status-open">Open</span>;
+      case "Pending": return <span className="status-badge status-pending">Pending</span>;
+      case "Resolved": return <span className="status-badge status-resolved">Resolved</span>;
+      default: return null;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background grid-bg-animated overflow-x-hidden">
       {/* Header */}
@@ -135,6 +149,7 @@ export default function AdminDashboard() {
               { id: "assign", label: "Assign Tickets", icon: Ticket },
               { id: "analytics", label: "Operational Intel", icon: BarChart3 },
               { id: "agents", label: "Team Management", icon: Users },
+              { id: "approvals", label: "Approvals", icon: ShieldCheck },
             ].map(item => (
               <button
                 key={item.id}
@@ -150,6 +165,7 @@ export default function AdminDashboard() {
               </button>
             ))}
           </nav>
+          
         </aside>
 
         {/* Main Content */}
@@ -158,6 +174,147 @@ export default function AdminDashboard() {
             
             {/* 1. OVERVIEW (RESTORED) */}
             <TabsContent value="overview" className="space-y-8 outline-none materialize">
+
+              <div className="mb-8">
+                <h2 className="text-2xl font-bold text-foreground">Ticket Board (Overview)</h2>
+                <p className="text-sm text-muted-foreground">Command and control hub for incoming grid requests.</p>
+              </div>
+
+              <div className="glass-card-enhanced overflow-hidden border-border/10">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-border/20 bg-card/60">
+                        <th className="px-6 py-4 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-widest">ID</th>
+                        <th className="px-6 py-4 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Subject</th>
+                        <th className="px-6 py-4 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Priority</th>
+                        <th className="px-6 py-4 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Status</th>
+                        <th className="px-6 py-4 text-right text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Operation</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/10">
+                      {tickets.map((ticket: any) => (
+                        <tr key={ticket.Ticket_ID} className="hover:bg-primary/5 transition-all group">
+                          <td className="px-6 py-4">
+                            <span className="text-xs font-mono font-bold text-primary">#{String(ticket.Ticket_ID).padStart(4, '0')}</span>
+                          </td>
+                          <td className="px-6 py-4 text-sm font-semibold">{ticket.Subject}</td>
+                          <td className="px-6 py-4">
+                             <span className={`text-[10px] font-bold px-2 py-1 rounded-sm border ${
+                               ticket.Priority === 'High' ? 'bg-red-500/10 border-red-500/30 text-red-500' :
+                               ticket.Priority === 'Medium' ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-500' :
+                               'bg-green-500/10 border-green-500/30 text-green-500'
+                             }`}>
+                               {ticket.Priority?.toUpperCase()}
+                             </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            {getStatusBadge(ticket.Status)}
+                          </td>
+                           <td className="px-6 py-4 text-right">
+                             <div className="flex items-center justify-end gap-2">
+                               <Link href={`/conversation/${ticket.Ticket_ID}`}>
+                                 <button className="px-3 py-1.5 bg-primary/10 border border-primary/20 text-primary text-[10px] font-black hover:bg-primary/20 transition-all">
+                                   OPEN CHAT
+                                 </button>
+                               </Link>
+                               <Select
+                                 value={ticket.Agent_ID ? String(ticket.Agent_ID) : "unassigned"}
+                                 onValueChange={(v) => handleAssign(ticket.Ticket_ID, v === "unassigned" ? null : parseInt(v))}
+                               >
+                                 <SelectTrigger className="bg-white/5 border-white/10 w-48 h-9 text-xs font-bold">
+                                   <SelectValue />
+                                 </SelectTrigger>
+                                 <SelectContent>
+                                   <SelectItem value="unassigned" className="text-red-400 font-bold">● UNASSIGNED</SelectItem>
+                                   {agentsList.map((a: any) => (
+                                     <SelectItem key={a.Agent_ID} value={String(a.Agent_ID)}>{a.Name}</SelectItem>
+                                   ))}
+                                 </SelectContent>
+                               </Select>
+                             </div>
+                           </td>
+                         </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            
+</TabsContent>
+
+            {/* 2. ASSIGN TICKETS */}
+            <TabsContent value="assign" className="materialize outline-none">
+              <div className="mb-8">
+                <h2 className="text-2xl font-bold text-foreground">Assign Tickets</h2>
+                <p className="text-sm text-muted-foreground">Command and control hub for incoming grid requests.</p>
+              </div>
+
+              <div className="glass-card-enhanced overflow-hidden border-border/10">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-border/20 bg-card/60">
+                        <th className="px-6 py-4 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-widest">ID</th>
+                        <th className="px-6 py-4 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Subject</th>
+                        <th className="px-6 py-4 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Priority</th>
+                        <th className="px-6 py-4 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Status</th>
+                        <th className="px-6 py-4 text-right text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Operation</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/10">
+                      {tickets.filter(t => t.Status !== "Resolved").map((ticket: any) => (
+                        <tr key={ticket.Ticket_ID} className="hover:bg-primary/5 transition-all group">
+                          <td className="px-6 py-4">
+                            <span className="text-xs font-mono font-bold text-primary">#{String(ticket.Ticket_ID).padStart(4, '0')}</span>
+                          </td>
+                          <td className="px-6 py-4 text-sm font-semibold">{ticket.Subject}</td>
+                          <td className="px-6 py-4">
+                             <span className={`text-[10px] font-bold px-2 py-1 rounded-sm border ${
+                               ticket.Priority === 'High' ? 'bg-red-500/10 border-red-500/30 text-red-500' :
+                               ticket.Priority === 'Medium' ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-500' :
+                               'bg-green-500/10 border-green-500/30 text-green-500'
+                             }`}>
+                               {ticket.Priority?.toUpperCase()}
+                             </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            {getStatusBadge(ticket.Status)}
+                          </td>
+                           <td className="px-6 py-4 text-right">
+                             <div className="flex items-center justify-end gap-2">
+                               <Link href={`/conversation/${ticket.Ticket_ID}`}>
+                                 <button className="px-3 py-1.5 bg-primary/10 border border-primary/20 text-primary text-[10px] font-black hover:bg-primary/20 transition-all">
+                                   OPEN CHAT
+                                 </button>
+                               </Link>
+                               <Select
+                                 value={ticket.Agent_ID ? String(ticket.Agent_ID) : "unassigned"}
+                                 onValueChange={(v) => handleAssign(ticket.Ticket_ID, v === "unassigned" ? null : parseInt(v))}
+                               >
+                                 <SelectTrigger className="bg-white/5 border-white/10 w-48 h-9 text-xs font-bold">
+                                   <SelectValue />
+                                 </SelectTrigger>
+                                 <SelectContent>
+                                   <SelectItem value="unassigned" className="text-red-400 font-bold">● UNASSIGNED</SelectItem>
+                                   {agentsList.map((a: any) => (
+                                     <SelectItem key={a.Agent_ID} value={String(a.Agent_ID)}>{a.Name}</SelectItem>
+                                   ))}
+                                 </SelectContent>
+                               </Select>
+                             </div>
+                           </td>
+                         </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* 3. OPERATIONAL INTEL (ANALYTICS) */}
+            <TabsContent value="analytics" className="materialize outline-none space-y-8">
+
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div className="glass-card p-6 border-primary/20">
                     <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Grid Throughput</p>
@@ -238,68 +395,8 @@ export default function AdminDashboard() {
                   </div>
                 </div>
               </div>
-            </TabsContent>
+            
 
-            {/* 2. ASSIGN TICKETS */}
-            <TabsContent value="assign" className="materialize outline-none">
-              <div className="mb-8">
-                <h2 className="text-2xl font-bold text-foreground">Assign Tickets</h2>
-                <p className="text-sm text-muted-foreground">Command and control hub for incoming grid requests.</p>
-              </div>
-
-              <div className="glass-card-enhanced overflow-hidden border-border/10">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-border/20 bg-card/60">
-                        <th className="px-6 py-4 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-widest">ID</th>
-                        <th className="px-6 py-4 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Subject</th>
-                        <th className="px-6 py-4 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Priority</th>
-                        <th className="px-6 py-4 text-right text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Operation</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border/10">
-                      {tickets.filter(t => t.Status !== "Resolved").map((ticket: any) => (
-                        <tr key={ticket.Ticket_ID} className="hover:bg-primary/5 transition-all group">
-                          <td className="px-6 py-4">
-                            <span className="text-xs font-mono font-bold text-primary">#{String(ticket.Ticket_ID).padStart(4, '0')}</span>
-                          </td>
-                          <td className="px-6 py-4 text-sm font-semibold">{ticket.Subject}</td>
-                          <td className="px-6 py-4">
-                             <span className={`text-[10px] font-bold px-2 py-1 rounded-sm border ${
-                               ticket.Priority === 'High' ? 'bg-red-500/10 border-red-500/30 text-red-500' :
-                               ticket.Priority === 'Medium' ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-500' :
-                               'bg-green-500/10 border-green-500/30 text-green-500'
-                             }`}>
-                               {ticket.Priority?.toUpperCase()}
-                             </span>
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            <Select
-                              value={ticket.Agent_ID ? String(ticket.Agent_ID) : "unassigned"}
-                              onValueChange={(v) => handleAssign(ticket.Ticket_ID, v === "unassigned" ? null : parseInt(v))}
-                            >
-                              <SelectTrigger className="bg-white/5 border-white/10 w-48 h-9 text-xs font-bold">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="unassigned" className="text-red-400 font-bold">● UNASSIGNED</SelectItem>
-                                {agentsList.map((a: any) => (
-                                  <SelectItem key={a.Agent_ID} value={String(a.Agent_ID)}>{a.Name}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </TabsContent>
-
-            {/* 3. OPERATIONAL INTEL (ANALYTICS) */}
-            <TabsContent value="analytics" className="materialize outline-none space-y-8">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <div className="glass-card p-6 border-primary/20">
                   <h3 className="text-xs font-bold uppercase tracking-widest text-primary mb-8">Resolution Trends</h3>
@@ -342,7 +439,8 @@ export default function AdminDashboard() {
                   </div>
                 </div>
               </div>
-            </TabsContent>
+            
+</TabsContent>
 
             {/* 4. TEAM MANAGEMENT */}
             <TabsContent value="agents" className="materialize outline-none space-y-6">
@@ -412,6 +510,82 @@ export default function AdminDashboard() {
                 </div>
               </div>
             </TabsContent>
+            {/* 5. APPROVALS */}
+            <TabsContent value="approvals" className="materialize outline-none space-y-6">
+              <div>
+                <h2 className="text-2xl font-bold text-foreground">Password Change Approvals</h2>
+                <p className="text-sm text-muted-foreground">Review and action agent password change requests.</p>
+              </div>
+
+              <div className="glass-card-enhanced overflow-hidden border-border/10">
+                {pwRequests.length === 0 ? (
+                  <div className="p-20 text-center text-xs italic text-muted-foreground">No pending approval requests.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-border/20 bg-card/60">
+                          <th className="px-6 py-4 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Agent</th>
+                          <th className="px-6 py-4 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Email</th>
+                          <th className="px-6 py-4 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Requested</th>
+                          <th className="px-6 py-4 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Status</th>
+                          <th className="px-6 py-4 text-right text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/10">
+                        {pwRequests.map((req: any) => (
+                          <tr key={req.Request_ID} className="hover:bg-primary/5 transition-all">
+                            <td className="px-6 py-4 text-sm font-bold">{req.Name}</td>
+                            <td className="px-6 py-4 text-xs text-muted-foreground">{req.Email_ID}</td>
+                            <td className="px-6 py-4 text-xs text-muted-foreground">
+                              {req.Requested_At ? new Date(req.Requested_At).toLocaleDateString() : "—"}
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className={`text-[10px] font-bold px-2 py-1 rounded-sm border ${
+                                req.Status === "Approved"
+                                  ? "bg-green-500/10 border-green-500/30 text-green-400"
+                                  : req.Status === "Denied"
+                                  ? "bg-red-500/10 border-red-500/30 text-red-400"
+                                  : "bg-amber-500/10 border-amber-500/30 text-amber-400"
+                              }`}>
+                                {req.Status?.toUpperCase() || "PENDING"}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              {(!req.Status || req.Status === "Pending") && (
+                                <div className="flex items-center justify-end gap-2">
+                                  <button
+                                    onClick={() =>
+                                      handlePwRequest(req.Request_ID, "approve")
+                                        .then(() => { toast.success(`Approved request for ${req.Name}`); fetchData(); })
+                                        .catch((e: any) => toast.error(e.message))
+                                    }
+                                    className="px-3 py-1.5 bg-green-500/10 border border-green-500/20 text-green-400 text-[10px] font-black hover:bg-green-500/20 transition-all"
+                                  >
+                                    APPROVE
+                                  </button>
+                                  <button
+                                    onClick={() =>
+                                      handlePwRequest(req.Request_ID, "deny")
+                                        .then(() => { toast.success(`Denied request for ${req.Name}`); fetchData(); })
+                                        .catch((e: any) => toast.error(e.message))
+                                    }
+                                    className="px-3 py-1.5 bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-black hover:bg-red-500/20 transition-all"
+                                  >
+                                    DENY
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
           </Tabs>
         </main>
       </div>

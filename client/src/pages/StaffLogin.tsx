@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Input } from "@/components/ui/input";
-import { Ticket, ArrowLeft, Eye, EyeOff, Cpu, Zap, Lock } from "lucide-react";
+import { Eye, EyeOff, Cpu, Zap, Lock, ArrowLeft } from "lucide-react";
 import { ImmersiveBackground } from "@/components/ImmersiveBackground";
 import { login } from "@/api";
+import { toast } from "sonner";
 
 export default function StaffLogin() {
   const [, setLocation] = useLocation();
@@ -122,7 +123,10 @@ export default function StaffLogin() {
               </div>
 
               <div className="space-y-2">
-                <label className="block text-xs font-bold text-muted-foreground uppercase tracking-widest">Password</label>
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-muted-foreground uppercase tracking-widest">Password</label>
+                  <button type="button" onClick={() => toast("Contact your system administrator at admin@support.com for a password reset.")} className="text-[10px] font-bold text-primary hover:text-primary/80 transition-colors uppercase tracking-widest">Forgot?</button>
+                </div>
                 <div className={`relative transition-all duration-300 ${focusedField === 'password' ? 'scale-[1.02]' : ''}`}>
                   <input
                     type={showPassword ? "text" : "password"}

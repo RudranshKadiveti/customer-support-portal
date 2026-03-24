@@ -66,11 +66,11 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
 
 # ─── MIDDLEWARE ──────────────────────────────────────────────────────────────
 
-CORS_ORIGIN = os.environ.get("CORS_ORIGIN", "http://localhost:3001")
+CORS_ORIGIN = os.environ.get("CORS_ORIGIN", "*")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[CORS_ORIGIN],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
     allow_headers=["*"],
@@ -78,7 +78,7 @@ app.add_middleware(
 
 app.add_middleware(
     TrustedHostMiddleware,
-    allowed_hosts=["localhost", "127.0.0.1", "*.railway.app"],
+    allowed_hosts=["localhost", "127.0.0.1", "*.railway.app", "*.ngrok-free.app", "*.ngrok.io", "*"],
 )
 
 ENFORCE_HTTPS = os.environ.get("ENFORCE_HTTPS", "0") == "1"
@@ -777,7 +777,17 @@ async def request_password_change(request: Request):
 @app.post("/api/ai/suggest")
 @limiter.limit(RATE_LIMIT_API)
 async def ai_suggest(request: Request):
-    return {"suggestion": "AI integration coming soon."}
+    import random
+    responses = [
+        "Hello! I understand you're experiencing an issue. Let me help you resolve this right away.",
+        "Hi there! Thank you for reaching out. I'm currently reviewing your request and will provide an update shortly.",
+        "Greetings! I have taken over this ticket. Could you please provide a few more details so we can assist you better?",
+        "Hello! We apologize for the inconvenience. Our team is looking into this and we will get back to you with a solution.",
+        "Hi! I see you're having some trouble. Let's work together to get this sorted out.",
+        "Thank you for contacting support! To help me investigate faster, could you share a screenshot of the error?",
+        "Hello! I am pulling up your account details now to see what might be causing this issue."
+    ]
+    return {"suggestion": random.choice(responses)}
 
 
 # ─── ENTRYPOINT ──────────────────────────────────────────────────────────────
