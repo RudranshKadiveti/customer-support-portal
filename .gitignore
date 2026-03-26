@@ -1,18 +1,14 @@
-# Node.js
-node_modules/
-dist/
-build/
-.env
+# Server
+server/venv/
+server/__pycache__/
+server/*.db
+server/.env
 
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-venv/
-.venv/
-env/
-.env
+# Client
+client/node_modules/
+client/dist/
 
-# OS
-.DS_Store
-Thumbs.db
+# IDE
+.vscode/
+.idea/
+*.pyc
